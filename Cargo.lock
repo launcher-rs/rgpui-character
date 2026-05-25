@@ -4406,7 +4406,7 @@ dependencies = [
 [[package]]
 name = "rgpui"
 version = "0.1.1"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -4523,7 +4523,7 @@ dependencies = [
 [[package]]
 name = "rgpui-linux"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -4569,7 +4569,7 @@ dependencies = [
 [[package]]
 name = "rgpui-macos"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "async-task",
@@ -4609,7 +4609,7 @@ dependencies = [
 [[package]]
 name = "rgpui-macros"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -4620,7 +4620,7 @@ dependencies = [
 [[package]]
 name = "rgpui-platform"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "console_error_panic_hook",
  "rgpui",
@@ -4633,7 +4633,7 @@ dependencies = [
 [[package]]
 name = "rgpui-web"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -4656,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "rgpui-wgpu"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4685,7 +4685,7 @@ dependencies = [
 [[package]]
 name = "rgpui-windows"
 version = "0.1.0"
-source = "git+https://github.com/launcher-rs/rgpui.git#d9ce9f1d2ba6b299b956ad91d7e2d821a3089725"
+source = "git+https://github.com/launcher-rs/rgpui.git#bfd5ff9fdf1f66440da2917bde4b1bddc4cf527b"
 dependencies = [
  "anyhow",
  "etagere",
