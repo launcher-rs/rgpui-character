@@ -2424,9 +2424,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
+checksum = "8be7462df143984c4598a256ef469b251d7d7f9e271135073e78fc535414f3d0"
 dependencies = [
  "bytes",
  "itoa",
@@ -3058,9 +3058,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.8.0"
+version = "2.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+checksum = "6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8"
 
 [[package]]
 name = "memmap2"
@@ -4294,9 +4294,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6356c351bbafaa105b059cf9abe5cc0ab24c01fcc50838e10cf76279e62b54"
+checksum = "e2993cf41c6ad8d296baa59abf56951bc4bb28b6b70eb73fe73697e50c1fa39d"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -4412,9 +4412,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-linux"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec8b629b667411d813fba3b85c1e1a35bff3be4bc4de0bb17ade1f1e2ba85461"
+checksum = "40297d96c995e25a7d0f5ca05766302a2b09ed6a67d44e73dfd7d1d18851c10f"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4441,9 +4441,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-macos"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d5eba62f72e0434ae3c84495c14a76b4717d8b5a95b48abb7e760a23db9ee05"
+checksum = "2f92aa6538b574bba9a8712ebf46741522305b785b083570547df8c6ca0b74e0"
 dependencies = [
  "anyhow",
  "async-task",
@@ -4481,9 +4481,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-macros"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c599c549224c0d8ba6c6fc1e41a17e1a8c2ef80f372a11b607553ccc1b1fc76"
+checksum = "f685d79a4e086794d07090fc20113b8d6ebe88029af731a5ac4c321ce5d86dbc"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -4493,9 +4493,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-platform"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed778ade9bf6627b26538c457f3c1f48d9e324cbab8a475219c2dc8c75740a4d"
+checksum = "0e45c3665d9a5720f62de75c4c875ad39a64a7d90403021f3940fc074b7ea4ee"
 dependencies = [
  "console_error_panic_hook",
  "rgpui",
@@ -4507,9 +4507,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-web"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66ca36b130123a8d69e321affa29c1df9604fb97117391b3391ea3f652491d5c"
+checksum = "9be0dee50d29d2660f6c4cc5e43dabf191f3badcdfc4515042dbf38bf5a6714e"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -4531,9 +4531,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-wgpu"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "070ec9975f62485c1685f80b9c758101999b63bc05d3b4d50783e9cd12760186"
+checksum = "7ad2a3cda460663d811d59511e262f5ee2cedeb378e67369adc39bbc06e0b170"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4560,9 +4560,9 @@ dependencies = [
 
 [[package]]
 name = "rgpui-windows"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ead4bd023cc6ce670b50cbde20d72cffaf27dae61cacf5afeacba6719fde3100"
+checksum = "f5e944ebbb97e060461e43cc352c7b355944a2fd2f354d5d6a9e89ff16e173d3"
 dependencies = [
  "anyhow",
  "etagere",
@@ -5152,15 +5152,15 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sval"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a05195a68cb8336336413c3f52ea0467c7666f5f652e01ba807319ffcc090f2"
+checksum = "5fb9efbae90f97301f4d25f3be63dfd99d6b7af9d088228a52ec960d649b2e7d"
 
 [[package]]
 name = "sval_buffer"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2887fd5e2454319f2f170860427f615451bb057fc9b3fd7f28b7a99ac2ccf0e4"
+checksum = "ff5c0280ea0af40b3a1fd0b532680b5067482ffb81412ee66ec04b1d9952b49a"
 dependencies = [
  "sval",
  "sval_ref",
@@ -5168,18 +5168,18 @@ dependencies = [
 
 [[package]]
 name = "sval_dynamic"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ddf3833aa407554ad40be081aea9cc3ea6d6798832ec83dd35022b45373896"
+checksum = "59b9067f2e68f58e110cf8019a268057e3791cf74b0fdb1b3c7c6e49104f44e6"
 dependencies = [
  "sval",
 ]
 
 [[package]]
 name = "sval_fmt"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94398bdd2ee99eee108e0b7b0df9081700a96cdefac3add5c09ad3e6f2376bcb"
+checksum = "96ebdbf0e4b175884aa587fcf551c16dabe245ea04235abdd8cbbd160b27ed5a"
 dependencies = [
  "itoa",
  "ryu",
@@ -5188,9 +5188,9 @@ dependencies = [
 
 [[package]]
 name = "sval_json"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f51ae40f37b541fdf81531e51d5071e8edc7c5a191cc23d288b654995b9eaba"
+checksum = "1e448d9fa216a6c16670b28d624fbbcf5c04e41eb187bd7c52e01222ffa72a12"
 dependencies = [
  "itoa",
  "ryu",
@@ -5199,9 +5199,9 @@ dependencies = [
 
 [[package]]
 name = "sval_nested"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3abe05be8455348e3f6edc14a85fd2fcf32f801a14f0126ce025e63851b4f13b"
+checksum = "021de5b5c26efd544c694cef9b8a9abe8633481bf3be1ea145a18a740818b291"
 dependencies = [
  "sval",
  "sval_buffer",
@@ -5210,18 +5210,18 @@ dependencies = [
 
 [[package]]
 name = "sval_ref"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a36361fa3c42c9fd129f4c5023a812d5b275742b28a672c758ec70049c61df00"
+checksum = "54ef5ffec8bc52ded04ee424ab8d959e25e64fd40a48a16d21f8991ce824c1bb"
 dependencies = [
  "sval",
 ]
 
 [[package]]
 name = "sval_serde"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb76707179eccecab345902a803aacacab6889f3af675dbe89766bc790b1a6cb"
+checksum = "b983833a8a2390f89ebcf9b9acd06883017014b4ffd72ee28e0c9de6852039f5"
 dependencies = [
  "serde_core",
  "sval",
