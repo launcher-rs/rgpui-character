@@ -1010,9 +1010,7 @@ fn main() {
     // 启动 rgpui 应用程序
     application()
         // 设置资源加载器
-        .with_assets(ExampleAssets {
-            base: manifest_dir.join("examples"),
-        })
+        .with_assets(ExampleAssets { base: manifest_dir })
         // 运行应用程序
         .run(move |cx: &mut App| {
             // 关闭所有窗口后保持进程运行（托盘图标需要）
@@ -1095,7 +1093,7 @@ fn setup_tray(cx: &mut App) {
     // 设置托盘提示文字
     cx.set_tray_tooltip("rgpui-character 小猫桌宠");
     // 加载托盘图标
-    let icon_bytes = include_bytes!("assets/tray-icon.png");
+    let icon_bytes = include_bytes!("../assets/tray-icon.png");
     // 设置托盘图标
     cx.set_tray_icon(Some(icon_bytes.as_slice()));
     // 设置托盘右键菜单
