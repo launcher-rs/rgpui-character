@@ -650,6 +650,9 @@ pub struct Scenix3D {
     cached_local_trs: Vec<([f32; 3], [f32; 4], [f32; 3])>,
     cached_global_mats: Vec<scenix::Mat4>,
     cached_bone_data: Vec<f32>,
+
+    // 关节变换覆盖（允许手动控制关节旋转）
+    joint_overrides: Vec<Option<scenix::Quat>>,
 }
 
 impl Scenix3D {
@@ -1135,6 +1138,7 @@ impl Scenix3D {
             cached_local_trs: Vec::new(),
             cached_global_mats: Vec::new(),
             cached_bone_data: Vec::new(),
+            joint_overrides: Vec::new(),
         })
     }
 
@@ -1735,27 +1739,61 @@ impl Scenix3D {
             }
         }
 
-        // 2. 计算全局变换（层级传播，使用缓存避免分配）
+        // 2. 应用关节旋转覆盖（手动控制覆盖动画采样结果）
+        for (i, override_q) in self.joint_overrides.iter().enumerate() {
+            if i >= num_joints {
+                break;
+            }
+            if let Some(q) = override_q {
+                self.cached_local_trs[i].1 = [q.x, q.y, q.z, q.w];
+            }
+        }
+
+        // 3. 计算全局变换（层级传播，使用 BFS 从根节点遍历，不依赖节点索引顺序）
         self.cached_global_mats.clear();
         self.cached_global_mats
             .resize(num_joints, scenix::Mat4::IDENTITY);
 
-        // 按拓扑序遍历（父节点索引总是小于子节点）
+        // 先计算所有局部矩阵
+        let local_mats: Vec<scenix::Mat4> = (0..num_joints)
+            .map(|i| {
+                trs_to_mat4(
+                    self.cached_local_trs[i].0,
+                    self.cached_local_trs[i].1,
+                    self.cached_local_trs[i].2,
+                )
+            })
+            .collect();
+
+        // 建立子节点列表
+        let mut children_of: Vec<Vec<usize>> = vec![Vec::new(); num_joints];
         for i in 0..num_joints {
-            let local = trs_to_mat4(
-                self.cached_local_trs[i].0,
-                self.cached_local_trs[i].1,
-                self.cached_local_trs[i].2,
-            );
-            self.cached_global_mats[i] = match self.joints[i].parent {
-                Some(parent) if parent < num_joints => {
-                    mat4_mul(&self.cached_global_mats[parent], &local)
+            if let Some(p) = self.joints[i].parent {
+                if p < num_joints {
+                    children_of[p].push(i);
                 }
-                _ => local,
-            };
+            }
         }
 
-        // 3. 计算骨骼矩阵并上传
+        // 找根节点（无父节点或父节点越界）
+        let mut queue: Vec<usize> = Vec::new();
+        for i in 0..num_joints {
+            if self.joints[i].parent.is_none() || self.joints[i].parent.unwrap() >= num_joints {
+                self.cached_global_mats[i] = local_mats[i];
+                queue.push(i);
+            }
+        }
+
+        // BFS 遍历层级，从根向下传播
+        while let Some(parent) = queue.pop() {
+            for &child in &children_of[parent] {
+                self.cached_global_mats[child] =
+                    mat4_mul(&self.cached_global_mats[parent], &local_mats[child]);
+                queue.push(child);
+            }
+        }
+
+        // 4. 计算骨骼矩阵并上传
         let mut total_bones = 0usize;
         for skin in &self.skins {
             total_bones += skin.joint_node_indices.len();
@@ -2125,6 +2163,50 @@ impl Scenix3D {
 
         eprintln!("[rgpui-3d] generate_walk_animation: hips={}, legs={:?}, spine={:?}, total_clips={}",
             hips, leg_indices, spine_idx, self.anim_clips.len());
+    }
+
+    /// 获取关节父节点索引
+    pub fn joint_parent(&self, index: usize) -> Option<usize> {
+        self.joints.get(index).and_then(|j| j.parent)
+    }
+
+    /// 获取关节的世界矩阵（需在 advance_animation 之后调用）
+    pub fn joint_world_matrix(&self, index: usize) -> Option<scenix::Mat4> {
+        if index < self.cached_global_mats.len() {
+            Some(self.cached_global_mats[index])
+        } else {
+            None
+        }
+    }
+
+    /// 获取关节的世界位置（需在 advance_animation 之后调用）
+    pub fn joint_world_position(&self, index: usize) -> Option<scenix::Vec3> {
+        self.joint_world_matrix(index).map(|m| {
+            scenix::Vec3::new(m.cols[3].x, m.cols[3].y, m.cols[3].z)
+        })
+    }
+
+    /// 设置关节的旋转覆盖（覆盖动画中的旋转）
+    ///
+    /// 传入的旋转是局部旋转（四元数），相对于关节的父节点。
+    /// 调用 `clear_joint_overrides()` 恢复动画控制。
+    pub fn set_joint_rotation_override(&mut self, index: usize, rotation: scenix::Quat) {
+        if index < self.joints.len() {
+            if self.joint_overrides.len() <= index {
+                self.joint_overrides.resize(index + 1, None);
+            }
+            self.joint_overrides[index] = Some(rotation);
+        }
+    }
+
+    /// 清除所有关节覆盖，恢复动画控制
+    pub fn clear_joint_overrides(&mut self) {
+        self.joint_overrides.clear();
+    }
+
+    /// 获取当前被覆盖的关节数量
+    pub fn joint_override_count(&self) -> usize {
+        self.joint_overrides.iter().filter(|o| o.is_some()).count()
     }
 
     /// 获取 GPU 场景的可变引用
