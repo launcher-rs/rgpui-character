@@ -2,12 +2,25 @@
 resolver = "3"
 members = [
     "crates/rgpui-character",
+    "crates/rgpui-3d",
     "examples/desktop_pet"
 ]
 
 [workspace.dependencies]
 rgpui-character = {path = "crates/rgpui-character",version = "0.2.0"}
+rgpui-3d = {path = "crates/rgpui-3d",version = "0.1.0"}
 
+anyhow = "1.0.86"
+rgpui = ">=0.1, <1.0"
+rgpui-platform = ">=0.1, <1.0"
+
+image = "0.25.1"
+smallvec = { version = "1.6", features = ["union", "const_new"] }
+wgpu = { version = "29.0" }
+# 轻量级异步运行时
+smol = "2.0"
+# 阻塞等待异步结果
+pollster = "0.4.0"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow" }
