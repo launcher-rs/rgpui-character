@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use rgpui::{
     App, Bounds, Context, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Render,
-    RenderImage, ScrollDelta, ScrollWheelEvent, TitlebarOptions, Window, WindowBackgroundAppearance,
+    RenderImage, ScrollDelta, ScrollWheelEvent, TitlebarOptions, Window,
     WindowBounds, WindowOptions, div, img, prelude::*, px, rgb, size,
 };
 use rgpui_platform::application;
@@ -25,6 +25,12 @@ struct SharedState {
     model_info: String,
     anim_names: Vec<String>,
     current_anim: usize,
+    anim_time: f32,
+    anim_duration: f32,
+    anim_speed: f32,
+    anim_paused: bool,
+    joint_count: usize,
+    skin_count: usize,
 }
 
 impl SharedState {
@@ -41,6 +47,12 @@ impl SharedState {
             model_info: String::new(),
             anim_names: Vec::new(),
             current_anim: 0,
+            anim_time: 0.0,
+            anim_duration: 0.0,
+            anim_speed: 1.0,
+            anim_paused: false,
+            joint_count: 0,
+            skin_count: 0,
         }
     }
 }
@@ -59,6 +71,12 @@ impl Render for SkinView {
         let dist = s.distance;
         let anim_names = s.anim_names.clone();
         let current_anim = s.current_anim;
+        let anim_time = s.anim_time;
+        let anim_duration = s.anim_duration;
+        let anim_speed = s.anim_speed;
+        let anim_paused = s.anim_paused;
+        let joint_count = s.joint_count;
+        let skin_count = s.skin_count;
 
         let img_elem = match &s.render_image {
             Some(img_ref) => div()
@@ -68,12 +86,12 @@ impl Render for SkinView {
             None => div()
                 .size(px(RENDER_W as f32))
                 .size(px(RENDER_H as f32))
-                .bg(rgb(0x0f0f23))
+                .bg(rgb(0xffffff))
                 .flex()
                 .items_center()
                 .justify_center()
                 .text_xl()
-                .text_color(rgb(0xffffff))
+                .text_color(rgb(0x333333))
                 .child("加载中..."),
         };
         drop(s);
@@ -85,14 +103,14 @@ impl Render for SkinView {
             .flex_col()
             .items_center()
             .gap(px(6.0))
-            .bg(rgb(0x0f0f23))
+            .bg(rgb(0xffffff))
             .size(px(900.0))
-            .size(px(720.0))
+            .size(px(780.0))
             .child(
                 div().py(px(8.0)).child(
                     div()
                         .text_2xl()
-                        .text_color(rgb(0xffffff))
+                        .text_color(rgb(0x222222))
                         .child("rgpui + scenix 骨骼动画"),
                 ),
             )
@@ -143,29 +161,103 @@ impl Render for SkinView {
                     })
                     .child(img_elem),
             )
+            // 动画控制栏
+            .child(
+                div()
+                    .py(px(6.0))
+                    .px(px(8.0))
+                    .flex()
+                    .gap(px(12.0))
+                    .items_center()
+                    .child(
+                        div()
+                            .text_color(rgb(0x1565c0))
+                            .text_sm()
+                            .child(format!("FPS: {:.0}", fps)),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0x555555))
+                            .text_sm()
+                            .child(info),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0x777777))
+                            .text_sm()
+                            .child(format!("关节: {} | 皮肤: {}", joint_count, skin_count)),
+                    ),
+            )
+            // 动画播放控制
             .child(
                 div()
                     .py(px(4.0))
+                    .px(px(8.0))
+                    .flex()
+                    .gap(px(8.0))
+                    .items_center()
+                    .child(
+                        div()
+                            .text_color(rgb(0xe65100))
+                            .text_sm()
+                            .child(format!(
+                                "动画: {}",
+                                anim_names
+                                    .get(current_anim)
+                                    .map(|n| n.as_str())
+                                    .unwrap_or("无")
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0x666666))
+                            .text_sm()
+                            .child(format!(
+                                "{:.2}s / {:.2}s",
+                                anim_time, anim_duration
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0x666666))
+                            .text_sm()
+                            .child(format!("速度: {:.1}x", anim_speed)),
+                    )
+                    .child(
+                        div()
+                            .text_color(if anim_paused {
+                                rgb(0xc62828)
+                            } else {
+                                rgb(0x2e7d32)
+                            })
+                            .text_sm()
+                            .child(if anim_paused { "暂停" } else { "播放" }),
+                    ),
+            )
+            // 提示信息
+            .child(
+                div()
+                    .py(px(4.0))
+                    .px(px(8.0))
                     .flex()
                     .gap(px(16.0))
                     .child(
                         div()
-                            .text_color(rgb(0xaaaaaa))
-                            .child(format!("{:.0} FPS", fps)),
+                            .text_color(rgb(0x999999))
+                            .text_xs()
+                            .child("拖拽旋转 | 滚轮缩放"),
                     )
-                    .child(div().text_color(rgb(0x888888)).child(info))
-                    .child(div().text_color(rgb(0x888888)).child(
-                        anim_names
-                            .get(current_anim)
-                            .map(|n| format!("动画: {n}"))
-                            .unwrap_or_default(),
-                    ))
-                    .child(div().text_color(rgb(0x666666)).child(format!(
-                        "角度 ({:.0}°, {:.0}°) | 距离 {:.1}",
-                        ox.to_degrees(),
-                        oy.to_degrees(),
-                        dist
-                    ))),
+                    .child(
+                        div()
+                            .text_color(rgb(0x999999))
+                            .text_xs()
+                            .child(format!(
+                                "视角 ({:.0}°, {:.0}°) | 距离 {:.1}",
+                                ox.to_degrees(),
+                                oy.to_degrees(),
+                                dist
+                            )),
+                    ),
             )
     }
 }
@@ -202,18 +294,28 @@ fn main() {
                 .expect("创建 3D 上下文失败")
         });
 
+        // 设置白色背景
+        ctx.set_clear_color(1.0, 1.0, 1.0, 1.0);
+
         let mut loaded_model: Option<SceneGraph> = None;
         let mut info: String = "未加载模型".into();
         let mut anim_names: Vec<String> = Vec::new();
 
-        if let Some(ref path) = model_path {
+                        if let Some(ref path) = model_path {
             let loader = scenix::GltfLoader::new();
             match loader.load_file(path) {
                 Ok(asset) => match ctx.register_gltf_asset(&asset) {
                     Ok(_) => {
-                        // 先加载蒙皮和动画（需要完整的 asset）
+                        // 加载蒙皮和动画（需要完整的 asset）
                         let skin_result = ctx.load_gltf_skins(path, &asset);
-                        let names = ctx.animation_names();
+                        let mut names = ctx.animation_names();
+
+                        // 如果没有动画数据，生成程序化行走动画
+                        if names.is_empty() && ctx.joint_count() > 0 {
+                            ctx.generate_walk_animation(0.8, 0.5);
+                            names = ctx.animation_names();
+                        }
+
                         if !names.is_empty() {
                             anim_names = names;
                         }
@@ -250,6 +352,8 @@ fn main() {
             let mut s = render_shared.lock().unwrap();
             s.model_info = info;
             s.anim_names = anim_names;
+            s.joint_count = ctx.joint_count();
+            s.skin_count = ctx.skinned_mesh_count();
         }
 
         let mut frame_times: Vec<f32> = Vec::with_capacity(30);
@@ -287,9 +391,15 @@ fn main() {
                 ctx.advance_animation(dt);
                 let result = ctx.render(scene, &camera).expect("渲染失败");
                 let render_image = Arc::new(result.into_render_image());
+
+                // 同步动画状态到 UI
                 {
                     let mut s = render_shared.lock().unwrap();
                     s.render_image = Some(render_image);
+                    s.anim_time = ctx.animation_time();
+                    s.anim_duration = ctx.animation_duration();
+                    s.anim_speed = ctx.animation_speed();
+                    s.anim_paused = ctx.is_animation_paused();
                 }
             }
 
@@ -313,13 +423,13 @@ fn main() {
     });
 
     application().run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(900.0), px(720.0)), cx);
+        let bounds = Bounds::centered(None, size(px(900.0), px(780.0)), cx);
         let state = shared;
 
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_background: WindowBackgroundAppearance::Transparent,
+                // window_background: WindowBackgroundAppearance::Transparent,
                 titlebar: Some(TitlebarOptions {
                     title: Some("rgpui + scenix 骨骼动画".into()),
                     appears_transparent: false,

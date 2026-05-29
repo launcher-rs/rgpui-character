@@ -417,7 +417,7 @@ fn address_to_wgpu(a: scenix::AddressMode) -> wgpu::AddressMode {
 // 骨骼动画数学辅助函数
 // ============================================================================
 
-/// 查找线性插值的两个关键帧索引和插值因子
+/// 查找线性插值的两个关键帧索引和插值因子（二分搜索）
 fn find_lerp_factors(times: &[f32], t: f32) -> (usize, usize, f32) {
     let last = times.len() - 1;
     if t <= times[0] {
@@ -426,11 +426,17 @@ fn find_lerp_factors(times: &[f32], t: f32) -> (usize, usize, f32) {
     if t >= times[last] {
         return (last, last, 0.0);
     }
-    let mut hi = 1;
-    while hi < times.len() && times[hi] < t {
-        hi += 1;
+    // 二分搜索找到 lo 满足 times[lo] <= t < times[lo+1]
+    let mut lo = 0usize;
+    let mut hi = last;
+    while hi - lo > 1 {
+        let mid = lo + (hi - lo) / 2;
+        if times[mid] <= t {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
     }
-    let lo = hi - 1;
     let frac = if times[hi] > times[lo] {
         (t - times[lo]) / (times[hi] - times[lo])
     } else {
@@ -619,6 +625,7 @@ pub struct Scenix3D {
     width: u32,
     height: u32,
     color_format: wgpu::TextureFormat,
+    clear_color: [f32; 4],
 
     // 帧计数器
     frame_index: u64,
@@ -633,10 +640,16 @@ pub struct Scenix3D {
     anim_clips: Vec<AnimClip>,
     active_anim: usize,
     anim_time: f32,
+    anim_speed: f32,
+    anim_paused: bool,
     bone_buffer: wgpu::Buffer,
     bone_capacity: u32,
     skin_info_buffer: wgpu::Buffer,
     skin_info_bg: wgpu::BindGroup,
+    // 每帧缓存，避免重复分配
+    cached_local_trs: Vec<([f32; 3], [f32; 4], [f32; 3])>,
+    cached_global_mats: Vec<scenix::Mat4>,
+    cached_bone_data: Vec<f32>,
 }
 
 impl Scenix3D {
@@ -1102,6 +1115,7 @@ impl Scenix3D {
             width,
             height,
             color_format,
+            clear_color: [1.0, 1.0, 1.0, 1.0], // 默认白色背景
             frame_index: 0,
             skin_pipeline,
             skin_layout,
@@ -1112,10 +1126,15 @@ impl Scenix3D {
             anim_clips: Vec::new(),
             active_anim: 0,
             anim_time: 0.0,
+            anim_speed: 1.0,
+            anim_paused: false,
             bone_buffer,
             bone_capacity,
             skin_info_buffer,
             skin_info_bg,
+            cached_local_trs: Vec::new(),
+            cached_global_mats: Vec::new(),
+            cached_bone_data: Vec::new(),
         })
     }
 
@@ -1161,6 +1180,11 @@ impl Scenix3D {
     /// 获取渲染高度
     pub fn height(&self) -> u32 {
         self.height
+    }
+
+    /// 设置渲染背景颜色（RGBA，0.0-1.0）
+    pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
+        self.clear_color = [r, g, b, a];
     }
 
     /// 注册网格到 GPU 场景
@@ -1626,6 +1650,18 @@ impl Scenix3D {
         if !self.anim_clips.is_empty() {
             self.active_anim = 0;
             self.anim_time = 0.0;
+            eprintln!("[rgpui-3d] load_gltf_skins: {} animations loaded, {} joints, {} skins",
+                self.anim_clips.len(), self.joints.len(), self.skins.len());
+            for (i, clip) in self.anim_clips.iter().enumerate() {
+                eprintln!("  anim[{}]: '{}' - {} samplers, {} channels",
+                    i, clip._name, clip.samplers.len(), clip.channels.len());
+            }
+            for (i, skin) in self.skins.iter().enumerate() {
+                eprintln!("  skin[{}]: {} joints", i, skin.joint_node_indices.len());
+            }
+        } else {
+            eprintln!("[rgpui-3d] load_gltf_skins: NO animations, {} joints, {} skins",
+                self.joints.len(), self.skins.len());
         }
 
         Ok(())
@@ -1645,24 +1681,23 @@ impl Scenix3D {
         if self.anim_clips.is_empty() || self.joints.is_empty() {
             return;
         }
+        if self.anim_paused {
+            return;
+        }
 
-        self.anim_time += dt;
+        self.anim_time += dt * self.anim_speed;
 
         let clip = &self.anim_clips[self.active_anim];
         let num_joints = self.joints.len();
 
-        // 1. 采样动画曲线得到每个关节的局部 TRS
-        let mut local_trs: Vec<([f32; 3], [f32; 4], [f32; 3])> = self
-            .joints
-            .iter()
-            .map(|j| j.default_trs)
-            .collect();
+        // 1. 采样动画曲线得到每个关节的局部 TRS（使用缓存避免分配）
+        self.cached_local_trs.clear();
+        self.cached_local_trs
+            .extend(self.joints.iter().map(|j| j.default_trs));
+        self.cached_local_trs.resize(num_joints, ([0.0; 3], [1.0, 0.0, 0.0, 0.0], [1.0; 3]));
 
         for channel in &clip.channels {
-            if channel.node >= num_joints {
-                continue;
-            }
-            if channel.sampler >= clip.samplers.len() {
+            if channel.node >= num_joints || channel.sampler >= clip.samplers.len() {
                 continue;
             }
             let sampler = &clip.samplers[channel.sampler];
@@ -1676,7 +1711,6 @@ impl Scenix3D {
             let sample = if t <= sampler.times[0] {
                 sampler.outputs[0]
             } else if t >= sampler.times[last] {
-                let val = sampler.outputs[last];
                 // 循环动画：折返到开头
                 let loop_t = t - sampler.times[last];
                 let dur = sampler.times[last] - sampler.times[0];
@@ -1686,7 +1720,7 @@ impl Scenix3D {
                         find_lerp_factors(&sampler.times, sampler.times[0] + wrapped);
                     lerp_value(sampler.outputs[low], sampler.outputs[high], frac, channel.target)
                 } else {
-                    val
+                    sampler.outputs[last]
                 }
             } else {
                 let (low, high, frac) = find_lerp_factors(&sampler.times, t);
@@ -1694,28 +1728,28 @@ impl Scenix3D {
             };
 
             match channel.target {
-                0 => local_trs[channel.node].0 = [sample[0], sample[1], sample[2]],
-                1 => local_trs[channel.node].1 = sample,
-                2 => local_trs[channel.node].2 = [sample[0], sample[1], sample[2]],
+                0 => self.cached_local_trs[channel.node].0 = [sample[0], sample[1], sample[2]],
+                1 => self.cached_local_trs[channel.node].1 = sample,
+                2 => self.cached_local_trs[channel.node].2 = [sample[0], sample[1], sample[2]],
                 _ => {}
             }
         }
 
-        // 2. 计算全局变换（层级传播）
-        let mut global_mats: Vec<scenix::Mat4> = (0..num_joints)
-            .map(|_| scenix::Mat4::IDENTITY)
-            .collect();
+        // 2. 计算全局变换（层级传播，使用缓存避免分配）
+        self.cached_global_mats.clear();
+        self.cached_global_mats
+            .resize(num_joints, scenix::Mat4::IDENTITY);
 
         // 按拓扑序遍历（父节点索引总是小于子节点）
         for i in 0..num_joints {
             let local = trs_to_mat4(
-                local_trs[i].0,
-                local_trs[i].1,
-                local_trs[i].2,
+                self.cached_local_trs[i].0,
+                self.cached_local_trs[i].1,
+                self.cached_local_trs[i].2,
             );
-            global_mats[i] = match self.joints[i].parent {
+            self.cached_global_mats[i] = match self.joints[i].parent {
                 Some(parent) if parent < num_joints => {
-                    mat4_mul(&global_mats[parent], &local)
+                    mat4_mul(&self.cached_global_mats[parent], &local)
                 }
                 _ => local,
             };
@@ -1768,7 +1802,9 @@ impl Scenix3D {
             });
         }
 
-        let mut all_bones: Vec<f32> = Vec::with_capacity(total_bones * 16);
+        // 使用缓存的 bone data Vec，避免每帧重新分配
+        self.cached_bone_data.clear();
+        self.cached_bone_data.reserve(total_bones * 16);
         let mut first_joint = 0u32;
 
         for skin in &self.skins {
@@ -1778,11 +1814,12 @@ impl Scenix3D {
                 .zip(skin.inverse_bind_matrices.iter())
             {
                 if *joint_idx < num_joints {
-                    let bone_mat = mat4_mul(&global_mats[*joint_idx], ibm);
+                    let bone_mat = mat4_mul(&self.cached_global_mats[*joint_idx], ibm);
                     let arr = mat4_to_flat(&bone_mat);
-                    all_bones.extend_from_slice(&arr);
+                    self.cached_bone_data.extend_from_slice(&arr);
                 } else {
-                    all_bones.extend_from_slice(&mat4_to_flat(&mat4_identity()));
+                    self.cached_bone_data
+                        .extend_from_slice(&mat4_to_flat(&mat4_identity()));
                 }
             }
             // 写入皮肤信息：每个皮肤对应当前 first_joint 偏移
@@ -1804,8 +1841,25 @@ impl Scenix3D {
         self.queue.write_buffer(
             &self.bone_buffer,
             0,
-            bytemuck::cast_slice(&all_bones),
+            bytemuck::cast_slice(&self.cached_bone_data),
         );
+
+        // 调试：前5帧打印骨骼状态
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static FRAME_COUNT: AtomicU32 = AtomicU32::new(0);
+        let fc = FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
+        if fc < 5 {
+            eprintln!("[rgpui-3d] advance_animation frame={}: time={:.3}, total_bones={}, bone_data_len={}",
+                fc + 1, self.anim_time, total_bones, self.cached_bone_data.len());
+            if self.cached_bone_data.len() >= 16 {
+                let m: Vec<f32> = self.cached_bone_data[0..16].to_vec();
+                eprintln!("  bone[0] (Hips): [{:.3}, {:.3}, {:.3}, {:.3}]",
+                    m[0], m[4], m[8], m[12]);
+            }
+            let clip = &self.anim_clips[self.active_anim];
+            eprintln!("  clip '{}' has {} channels, {} samplers",
+                clip._name, clip.channels.len(), clip.samplers.len());
+        }
     }
 
     /// 获取动画剪辑名称列表
@@ -1829,6 +1883,248 @@ impl Scenix3D {
     /// 设置当前动画时间（秒）
     pub fn set_animation_time(&mut self, t: f32) {
         self.anim_time = t;
+    }
+
+    /// 获取动画播放速度（1.0 = 正常速度）
+    pub fn animation_speed(&self) -> f32 {
+        self.anim_speed
+    }
+
+    /// 设置动画播放速度（1.0 = 正常速度，2.0 = 两倍速，0.5 = 半速）
+    pub fn set_animation_speed(&mut self, speed: f32) {
+        self.anim_speed = speed;
+    }
+
+    /// 动画是否暂停
+    pub fn is_animation_paused(&self) -> bool {
+        self.anim_paused
+    }
+
+    /// 暂停/恢复动画播放
+    pub fn set_animation_paused(&mut self, paused: bool) {
+        self.anim_paused = paused;
+    }
+
+    /// 获取当前动画剪辑的总时长（秒）
+    pub fn animation_duration(&self) -> f32 {
+        if self.anim_clips.is_empty() {
+            return 0.0;
+        }
+        let clip = &self.anim_clips[self.active_anim];
+        let mut max_time = 0.0f32;
+        for sampler in &clip.samplers {
+            if let Some(&last_time) = sampler.times.last() {
+                max_time = max_time.max(last_time);
+            }
+        }
+        max_time
+    }
+
+    /// 获取当前动画剪辑索引
+    pub fn active_animation_index(&self) -> usize {
+        self.active_anim
+    }
+
+    /// 获取蒙皮网格数量
+    pub fn skinned_mesh_count(&self) -> usize {
+        self.skinned_meshes.len()
+    }
+
+    /// 获取关节数量
+    pub fn joint_count(&self) -> usize {
+        self.joints.len()
+    }
+
+    /// 生成程序化行走动画（当 glTF 没有动画数据时使用）
+    ///
+    /// 通过皮肤数据找到骨骼根节点（Hips），然后自动查找大腿、膝关节和脊柱，
+    /// 生成循环行走动画并添加到动画剪辑列表。
+    ///
+    /// * `cycle_duration` - 一个行走周期的时长（秒），默认 0.8
+    /// * `stride_angle` - 腿部摆动幅度（弧度），默认 0.5
+    pub fn generate_walk_animation(&mut self, cycle_duration: f32, stride_angle: f32) {
+        if self.skins.is_empty() {
+            eprintln!("[rgpui-3d] generate_walk_animation: no skins, aborting");
+            return;
+        }
+
+        // 使用皮肤的关节列表来确定哪些节点是骨骼关节
+        let skin = &self.skins[0];
+        let joint_set: std::collections::HashSet<usize> =
+            skin.joint_node_indices.iter().copied().collect();
+
+        // 在皮肤关节中找根节点：没有父节点，或父节点不在皮肤关节中
+        let skeleton_root = skin.joint_node_indices.iter().find(|&&node_idx| {
+            node_idx < self.joints.len() && {
+                match self.joints[node_idx].parent {
+                    None => true,
+                    Some(p) => !joint_set.contains(&p),
+                }
+            }
+        }).copied();
+
+        let Some(hips) = skeleton_root else {
+            eprintln!("[rgpui-3d] generate_walk_animation: no skeleton root found");
+            return;
+        };
+
+        eprintln!("[rgpui-3d] generate_walk_animation: skeleton root (hips) = node[{}]", hips);
+
+        // 找 Hips 的皮肤子关节
+        let hips_children: Vec<usize> = skin.joint_node_indices.iter()
+            .filter(|&&node_idx| {
+                node_idx < self.joints.len() && self.joints[node_idx].parent == Some(hips)
+            })
+            .copied()
+            .collect();
+
+        eprintln!("[rgpui-3d]   hips_children = {:?}", hips_children);
+
+        // 分类子关节：腿 vs 脊柱
+        // 脊柱子树包含更多后代（手臂、头等），腿子树较小
+        let (leg_indices, spine_idx) = if hips_children.len() >= 3 {
+            let mut with_size: Vec<(usize, usize)> = hips_children.iter().map(|&c| {
+                // 计算 c 子树中属于皮肤关节的后代数量
+                let size = skin.joint_node_indices.iter().filter(|&&node_idx| {
+                    let mut cur = self.joints.get(node_idx).and_then(|j| j.parent);
+                    while let Some(p) = cur {
+                        if p == c { return true; }
+                        cur = self.joints.get(p).and_then(|j| j.parent);
+                    }
+                    false
+                }).count();
+                (c, size)
+            }).collect();
+            with_size.sort_by_key(|&(_, s)| std::cmp::Reverse(s));
+            let spine = with_size[0].0;
+            let legs: Vec<usize> = with_size[1..].iter().map(|&(c, _)| c).collect();
+            (legs, Some(spine))
+        } else if hips_children.len() == 2 {
+            (hips_children, None)
+        } else {
+            (vec![], None)
+        };
+
+        eprintln!("[rgpui-3d]   leg_indices = {:?}, spine_idx = {:?}", leg_indices, spine_idx);
+
+        if leg_indices.is_empty() {
+            return;
+        }
+
+        let dt = cycle_duration / 16.0; // 16 帧一个周期
+        let frames = 17; // 0..=16
+        let times: Vec<f32> = (0..frames).map(|i| i as f32 * dt).collect();
+
+        let mut samplers = Vec::new();
+        let mut channels = Vec::new();
+
+        // 对每条腿生成旋转动画
+        for (leg_idx, &leg_node) in leg_indices.iter().enumerate() {
+            let phase_offset = if leg_idx == 0 { 0.0 } else { std::f32::consts::PI };
+            let dir = if leg_idx == 0 { 1.0 } else { -1.0 };
+
+            // 大腿前后摆动（绕 X 轴旋转）
+            let rotation_outputs: Vec<[f32; 4]> = (0..frames).map(|i| {
+                let t = i as f32 / 16.0 * std::f32::consts::TAU + phase_offset;
+                let angle = dir * stride_angle * t.sin();
+                // 四元数：绕 X 轴旋转
+                let half = angle * 0.5;
+                [half.sin(), 0.0, 0.0, half.cos()]
+            }).collect();
+
+            let sampler_idx = samplers.len();
+            samplers.push(AnimSampler {
+                times: times.clone(),
+                outputs: rotation_outputs,
+            });
+            channels.push(AnimChannel {
+                node: leg_node,
+                target: 1, // rotation
+                sampler: sampler_idx,
+            });
+
+            // 找膝关节（大腿的皮肤子关节）
+            if let Some(knee) = skin.joint_node_indices.iter()
+                .find(|&&node_idx| {
+                    node_idx < self.joints.len() && self.joints[node_idx].parent == Some(leg_node)
+                })
+                .copied()
+            {
+                // 膝关节弯曲（走路时自然弯曲）
+                let knee_outputs: Vec<[f32; 4]> = (0..frames).map(|i| {
+                    let t = i as f32 / 16.0 * std::f32::consts::TAU + phase_offset;
+                    // 弯曲角度：腿向后摆时弯曲更多
+                    let bend = -0.3 * (t + std::f32::consts::FRAC_PI_4).cos().max(0.0);
+                    let half = bend * 0.5;
+                    [half.sin(), 0.0, 0.0, half.cos()]
+                }).collect();
+
+                let sampler_idx = samplers.len();
+                samplers.push(AnimSampler {
+                    times: times.clone(),
+                    outputs: knee_outputs,
+                });
+                channels.push(AnimChannel {
+                    node: knee,
+                    target: 1, // rotation
+                    sampler: sampler_idx,
+                });
+            }
+        }
+
+        // 脊柱轻微摆动
+        if let Some(spine) = spine_idx {
+            let spine_outputs: Vec<[f32; 4]> = (0..frames).map(|i| {
+                let t = i as f32 / 16.0 * std::f32::consts::TAU;
+                let angle = 0.05 * t.sin(); // 很小的摆动
+                let half = angle * 0.5;
+                [0.0, half.sin(), 0.0, half.cos()] // 绕 Y 轴
+            }).collect();
+
+            let sampler_idx = samplers.len();
+            samplers.push(AnimSampler {
+                times: times.clone(),
+                outputs: spine_outputs,
+            });
+            channels.push(AnimChannel {
+                node: spine,
+                target: 1, // rotation
+                sampler: sampler_idx,
+            });
+        }
+
+        // Hips 上下轻微弹跳
+        let hips_outputs: Vec<[f32; 4]> = (0..frames).map(|i| {
+            let t = i as f32 / 16.0 * std::f32::consts::TAU;
+            let y_offset = -0.02 * (t * 2.0).abs().cos(); // 上下微弹
+            [0.0, y_offset, 0.0, 0.0]
+        }).collect();
+
+        let sampler_idx = samplers.len();
+        samplers.push(AnimSampler {
+            times,
+            outputs: hips_outputs,
+        });
+        channels.push(AnimChannel {
+            node: hips,
+            target: 0, // translation
+            sampler: sampler_idx,
+        });
+
+        self.anim_clips.push(AnimClip {
+            _name: "Walk".to_string(),
+            samplers,
+            channels,
+        });
+
+        // 如果之前没有动画，激活这个
+        if self.active_anim >= self.anim_clips.len() - 1 {
+            self.active_anim = self.anim_clips.len() - 1;
+            self.anim_time = 0.0;
+        }
+
+        eprintln!("[rgpui-3d] generate_walk_animation: hips={}, legs={:?}, spine={:?}, total_clips={}",
+            hips, leg_indices, spine_idx, self.anim_clips.len());
     }
 
     /// 获取 GPU 场景的可变引用
@@ -1943,10 +2239,10 @@ impl Scenix3D {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.059,
-                            g: 0.059,
-                            b: 0.137,
-                            a: 1.0,
+                            r: self.clear_color[0] as f64,
+                            g: self.clear_color[1] as f64,
+                            b: self.clear_color[2] as f64,
+                            a: self.clear_color[3] as f64,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
