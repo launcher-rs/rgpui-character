@@ -1,5 +1,7 @@
 # rgpui-character
 
+<h2>代码移动到了 <a href='https://github.com/launcher-rs/rgpui'>rgpui仓库中</a></h2>
+
 基于 [rgpui](https://github.com/launcher-rs/rgpui) 框架的桌宠与 UI 角色运行时系统。
 
 ```
